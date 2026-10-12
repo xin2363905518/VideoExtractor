@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         视频提取器
 // @namespace   https://github.com/example/video-extractor
-// @version      1.0.36
+// @version      1.0.37
 // @description  提取页面中的视频到独立播放器中播放，支持直链/HLS/DASH，并支持 blob 直播流的浮层播放（含网页全屏、拖拽、缩放，自定义控制栏）
 // @author       Reasonix
 // @match        *://*/*
@@ -85,8 +85,8 @@
 .ve-fullscreen-btn { right: 60px; }
 .ve-webfullscreen-btn { right: 110px; }
 
-.ve-custom-controls { position: absolute; bottom: 0; left: 0; right: 0; height: 50px; background: linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.3)); display: flex; align-items: center; padding: 0 15px; z-index: 1001; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
-.ve-custom-controls.active { opacity: 1; pointer-events: auto; }
+.ve-custom-controls { position: absolute; bottom: 0; left: 0; right: 0; height: 50px; background: linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.3)); display: flex; align-items: center; padding: 0 15px; z-index: 1001; opacity: 0; transform: translateY(100%); transition: opacity 0.3s ease, transform 0.3s ease; pointer-events: none; }
+.ve-custom-controls.active { opacity: 1; transform: translateY(0); pointer-events: auto; }
 .ve-custom-controls button { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; margin-right: 10px; padding: 5px; flex: none; }
 .ve-time { color: #fff; font-size: 13px; margin: 0 8px; white-space: nowrap; flex: none; }
 .ve-progress-container { display: flex; align-items: center; flex: 3; min-width: 0; }
@@ -439,6 +439,8 @@
                 videoHolder.style.cursor = 'grab';
                 if (suppressClick) setTimeout(() => { suppressClick = false; }, 0);
             }
+            // 松开鼠标后重新计时控制栏隐藏
+            if (webFullscreenActive) scheduleHideControls();
         });
         videoHolder.addEventListener('click', (e) => {
             if (webFullscreenActive && suppressClick) {
@@ -454,6 +456,73 @@
             scale = Math.min(3, Math.max(0.5, scale + delta));
             updateVideoTransform();
         }, { passive: false });
+
+        // ===== 控制栏自动隐藏逻辑 =====
+        let controlsHideTimer = null;
+        const CONTROLS_HIDE_DELAY = 5000;   // 无操作 5 秒后隐藏
+        const CONTROLS_SHOW_ZONE = 70;      // 指针进入底部该区域(px)时显示
+
+        function clearControlsTimer() {
+            if (controlsHideTimer) {
+                clearTimeout(controlsHideTimer);
+                controlsHideTimer = null;
+            }
+        }
+
+        function scheduleHideControls() {
+            clearControlsTimer();
+            controlsHideTimer = setTimeout(() => {
+                controlsHideTimer = null;
+                if (!webFullscreenActive) return;
+                // 指针还在控制栏上就不隐藏，续期
+                if (customControls.matches(':hover')) {
+                    scheduleHideControls();
+                    return;
+                }
+                customControls.classList.remove('active');
+            }, CONTROLS_HIDE_DELAY);
+        }
+
+        function showControls() {
+            if (!webFullscreenActive) return;
+            customControls.classList.add('active');
+            scheduleHideControls();
+        }
+
+        // 指针移动到播放器底部区域 → 显示控制栏
+        playerContainer.addEventListener('mousemove', (e) => {
+            if (!webFullscreenActive) return;
+            const rect = playerContainer.getBoundingClientRect();
+            if (e.clientY >= rect.bottom - CONTROLS_SHOW_ZONE) {
+                showControls();
+            }
+        });
+
+        // 指针停留在控制栏上 → 保持显示
+        customControls.addEventListener('mousemove', () => {
+            if (!webFullscreenActive) return;
+            scheduleHideControls();
+        });
+        customControls.addEventListener('mouseenter', () => {
+            if (!webFullscreenActive) return;
+            clearControlsTimer();
+            customControls.classList.add('active');
+        });
+        customControls.addEventListener('mouseleave', () => {
+            if (!webFullscreenActive) return;
+            scheduleHideControls();
+        });
+        // 拖动进度条/音量条时不要隐藏
+        customControls.addEventListener('mousedown', () => {
+            clearControlsTimer();
+        });
+
+        // 指针移出播放器（离开窗口）→ 立即隐藏
+        playerContainer.addEventListener('mouseleave', () => {
+            if (!webFullscreenActive) return;
+            clearControlsTimer();
+            customControls.classList.remove('active');
+        });
 
         function enterWebFullscreen() {
             try {
@@ -476,7 +545,7 @@
                 actualVideo.style.objectFit = 'contain';
                 actualVideo.controls = false;
                 customControls.style.display = 'flex';
-                customControls.classList.add('active');
+                showControls();   // 显示并启动 5 秒自动隐藏计时
                 clearTransform();
                 videoHolder.style.cursor = 'grab';
                 syncVolumeUI();
@@ -506,6 +575,7 @@
                 actualVideo.style.height = '';
                 actualVideo.style.objectFit = '';
                 actualVideo.controls = originalControls;
+                clearControlsTimer();
                 customControls.style.display = 'none';
                 customControls.classList.remove('active');
                 clearTransform();
