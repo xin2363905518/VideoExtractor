@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         视频提取器
 // @namespace   https://github.com/example/video-extractor
-// @version      1.0.37
+// @version      1.0.39
 // @description  提取页面中的视频到独立播放器中播放，支持直链/HLS/DASH，并支持 blob 直播流的浮层播放（含网页全屏、拖拽、缩放，自定义控制栏）
 // @author       Reasonix
 // @match        *://*/*
 // @grant        GM_registerMenuCommand
+// @grant        GM_unregisterMenuCommand
 // @grant        GM_addStyle
 // @run-at       document-end
 // @license MIT
@@ -18,8 +19,30 @@
 
     // ========== 开关管理 ==========
     const STORAGE_KEY = 'videoExtractor_enabled';
-    function isEnabled() { return sessionStorage.getItem(STORAGE_KEY) === 'true'; }
-    function setEnabled(val) { sessionStorage.setItem(STORAGE_KEY, val ? 'true' : 'false'); }
+    function isEnabled() { return localStorage.getItem(STORAGE_KEY) === 'true'; }
+    function setEnabled(val) { localStorage.setItem(STORAGE_KEY, val ? 'true' : 'false'); }
+
+    let menuCommandId = null;
+
+    function updateMenuCommand() {
+        // 先注销旧菜单项（如果支持）
+        try {
+            if (menuCommandId !== null && typeof GM_unregisterMenuCommand === 'function') {
+                GM_unregisterMenuCommand(menuCommandId);
+                menuCommandId = null;
+            }
+        } catch (e) {
+            console.error('注销菜单失败：', e);
+        }
+        // 按当前状态显示对应菜单文字
+        const label = isEnabled() ? '当前状态：开，点击关闭' : '当前状态：关，点击开启';
+        try {
+            menuCommandId = GM_registerMenuCommand(label, toggleEnabled);
+        } catch (e) {
+            console.error('菜单注册失败：', e);
+        }
+    }
+
     function toggleEnabled() {
         const next = !isEnabled();
         setEnabled(next);
@@ -29,13 +52,12 @@
         } else {
             removeAllIcons();
         }
+        updateMenuCommand();
         alert('视频提取器：已' + (next ? '开启' : '关闭'));
     }
-    try {
-        GM_registerMenuCommand('切换 视频提取器', toggleEnabled);
-    } catch (e) {
-        console.error('菜单注册失败：', e);
-    }
+
+    // 首次注册菜单
+    updateMenuCommand();
 
     // ========== 全局 CSS ==========
     const CSS = `
@@ -641,6 +663,8 @@
     // ========== 初始化 ==========
     function init() {
         startObserver();
+        // 每次页面加载时，按当前 localStorage 状态同步菜单文字
+        updateMenuCommand();
         if (isEnabled()) {
             removeAllIcons();
             scanAndInject();
