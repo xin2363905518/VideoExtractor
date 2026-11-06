@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>视频提取器 - 自测页</title>
+<style>
+    body { margin: 0; padding: 24px; background: #f5f6f8; font: 14px/1.7 system-ui, -apple-system, "Segoe UI", sans-serif; color: #222; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    h2 { font-size: 16px; margin: 32px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #dcdfe6; }
+    .tip { background: #fff8e6; border-left: 4px solid #f0b429; padding: 10px 14px; border-radius: 4px; margin: 12px 0; }
+    .row { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    video { background: #000; width: 480px; max-width: 100%; display: block; }
+    button { padding: 6px 14px; border: 1px solid #c9ced6; border-radius: 6px; background: #fff; cursor: pointer; font-size: 13px; }
+    button:hover { background: #eef1f5; }
+    .spacer { height: 1400px; display: flex; align-items: flex-end; justify-content: center; color: #999; }
+    code { background: #eef1f5; padding: 1px 5px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>视频提取器 · 自测页</h1>
+<div class="tip">
+    先在 Tampermonkey 菜单里点 <b>“当前状态：关，点击开启”</b>，然后逐个验证下面 6 个场景。<br>
+    每个视频右上角应出现 ▶ 按钮；blob 场景点击后应弹出浮层播放器。
+</div>
+
+<h2>1. 直链 MP4</h2>
+<div class="row">
+    <video src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" controls></video>
+</div>
+
+<h2>2. HLS（带 query 参数）</h2>
+<div class="row">
+    <video src="https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8?token=demo&exp=1" controls></video>
+    <p style="color:#888;margin:8px 0 0">旧版对 <code>.m3u8?token=</code> 识别失败，这里验证类型判断是否仍然正确。</p>
+</div>
+
+<h2>3. blob 源（浮层播放器）</h2>
+<div class="row">
+    <video id="blobVideo" controls></video>
+    <p style="margin:8px 0">
+        <button id="makeBlob">生成 blob: 源</button>
+        <span style="color:#888">生成后点击视频上的 ▶，应在当前页弹出浮层；Esc 关闭并还原位置。</span>
+    </p>
+</div>
+
+<h2>4. 滚动定位</h2>
+<div class="row">
+    <p style="color:#888;margin:0 0 8px">向下滚动，按钮应始终贴着视频右上角；滚出视口后按钮消失。</p>
+</div>
+<div class="spacer">
+    <video src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" controls></video>
+</div>
+
+<h2>5. Shadow DOM</h2>
+<div class="row">
+    <div id="shadowHost"></div>
+    <p style="color:#888;margin:8px 0 0">视频放在 open shadow root 内，旧版扫描不到。</p>
+</div>
+
+<h2>6. 动态插入</h2>
+<div class="row">
+    <button id="addVideo">插入一个视频</button>
+    <div id="dynamicBox" style="margin-top:12px"></div>
+</div>
+
+<script>
+    // 3. blob 源：用空 MediaSource 生成 blob URL，仅用于验证浮层交互
+    document.getElementById('makeBlob').addEventListener('click', function () {
+        var video = document.getElementById('blobVideo');
+        if (window.MediaSource) {
+            var ms = new MediaSource();
+            video.src = URL.createObjectURL(ms);
+        } else {
+            video.src = URL.createObjectURL(new Blob([], { type: 'video/mp4' }));
+        }
+        video.load();
+    });
+
+    // 5. shadow DOM
+    (function () {
+        var host = document.getElementById('shadowHost');
+        var shadow = host.attachShadow({ mode: 'open' });
+        shadow.innerHTML =
+            '<style>video{width:480px;max-width:100%;background:#000;display:block}</style>' +
+            '<video src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" controls></video>';
+    })();
+
+    // 6. 动态插入
+    document.getElementById('addVideo').addEventListener('click', function () {
+        var box = document.getElementById('dynamicBox');
+        var v = document.createElement('video');
+        v.src = 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4';
+        v.controls = true;
+        v.style.width = '320px';
+        box.appendChild(v);
+    });
+</script>
+
+</body>
+</html>
